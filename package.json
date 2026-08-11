@@ -1,0 +1,23 @@
+{
+  "name": "nul",
+  "private": true,
+  "version": "1.0.0",
+  "description": "НУЛЬ — браузерная survival/экономическая игра",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @nul/client",
+    "dev:server": "npm run dev --workspace @nul/server",
+    "build": "npm run build --workspace @nul/client",
+    "preview": "npm run preview --workspace @nul/client",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
