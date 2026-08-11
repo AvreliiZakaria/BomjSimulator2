@@ -8,7 +8,7 @@ export interface BuiltDistrict {
   windowLayers: Phaser.GameObjects.Graphics[];
   /** Свечение фонарей: включается в тёмное время. */
   lampGlows: Phaser.GameObjects.Image[];
-  /** Слой земли/дорог: рисуется один раз. */
+  /** Слой земли и дорог: рисуется один раз. */
   groundLayer: Phaser.GameObjects.Graphics;
   destroy(): void;
 }
@@ -24,7 +24,7 @@ const STYLE_COLORS: Record<string, { wall: number; roof: number; accent: number 
 
 /**
  * Строит район из данных: земля, дороги, здания, декор, коллизии.
- * Здание: (x, y, w, h) — фасад и коллизия, height — видимая глубина крыши сверху.
+ * Здание: (x, y, w, h) — фасад и коллизия, height — видимая глубина крыши сверху (3/4 обзор).
  */
 export class DistrictBuilder {
   static build(scene: Phaser.Scene, district: DistrictDefinition): BuiltDistrict {
@@ -35,13 +35,11 @@ export class DistrictBuilder {
     const ground = scene.add.graphics();
     ground.setDepth(-10000);
     DistrictBuilder.drawGround(ground, district);
-
     for (const road of district.roads) DistrictBuilder.drawRoad(ground, road);
 
     for (const building of district.buildings) {
       DistrictBuilder.drawBuilding(scene, building, colliders, windowLayers);
     }
-
     for (const prop of district.props) {
       DistrictBuilder.drawProp(scene, prop, colliders, lampGlows);
     }
@@ -54,10 +52,10 @@ export class DistrictBuilder {
       [b.x + b.w / 2, b.y - 40, b.w + 200, 80],
       [b.x + b.w / 2, b.y + b.h + 40, b.w + 200, 80]
     ];
-    for (const [x, y, w, h] of walls) {
-      const wall = scene.add.rectangle(x, y, w, h);
-      wall.setVisible(false);
-      colliders.add(wall);
+    for (const wall of walls) {
+      const body = scene.add.rectangle(wall[0], wall[1], wall[2], wall[3]);
+      body.setVisible(false);
+      colliders.add(body);
     }
 
     return {
@@ -76,15 +74,15 @@ export class DistrictBuilder {
   }
 
   private static drawGround(g: Phaser.GameObjects.Graphics, district: DistrictDefinition): void {
-    const { x, y, w, h } = district.bounds;
+    const bounds = district.bounds;
     g.fillStyle(district.grassColor, 1);
-    g.fillRect(x - 200, y - 200, w + 400, h + 400);
+    g.fillRect(bounds.x - 200, bounds.y - 200, bounds.w + 400, bounds.h + 400);
 
-    // Пятна земли, чтобы поверхность не была плоской заливкой.
+    // Пятна земли, чтобы поверхность не выглядела плоской заливкой.
     g.fillStyle(district.groundColor, 0.55);
     for (let i = 0; i < 90; i += 1) {
-      const px = x + Math.random() * w;
-      const py = y + Math.random() * h;
+      const px = bounds.x + Math.random() * bounds.w;
+      const py = bounds.y + Math.random() * bounds.h;
       g.fillEllipse(px, py, 60 + Math.random() * 180, 30 + Math.random() * 90);
     }
   }
@@ -92,11 +90,8 @@ export class DistrictBuilder {
   private static drawRoad(g: Phaser.GameObjects.Graphics, road: RoadDef): void {
     // Тротуары
     g.fillStyle(0x53565c, 1);
-    if (road.orientation === 'h') {
-      g.fillRect(road.x, road.y - 26, road.w, road.h + 52);
-    } else {
-      g.fillRect(road.x - 26, road.y, road.w + 52, road.h);
-    }
+    if (road.orientation === 'h') g.fillRect(road.x, road.y - 26, road.w, road.h + 52);
+    else g.fillRect(road.x - 26, road.y, road.w + 52, road.h);
 
     // Асфальт
     g.fillStyle(0x35373c, 1);
@@ -132,7 +127,7 @@ export class DistrictBuilder {
     const g = scene.add.graphics();
     g.setDepth(building.y + building.h);
 
-    // Крыша (вид сверху под углом)
+    // Крыша: вид сверху под углом.
     g.fillStyle(roof, 1);
     g.fillRect(building.x, building.y - building.height, building.w, building.height);
     g.fillStyle(0x000000, 0.18);
@@ -148,7 +143,6 @@ export class DistrictBuilder {
     g.lineStyle(2, 0x000000, 0.25);
     g.strokeRect(building.x, building.y - building.height, building.w, building.h + building.height);
 
-    // Окна (день)
     const rows = building.windowRows ?? 0;
     const cols = building.windowCols ?? 0;
     const litLayer = scene.add.graphics();
@@ -179,14 +173,13 @@ export class DistrictBuilder {
     }
 
     if (building.style === 'shop') {
-      // Витрина и вывеска
+      // Витрина, вывеска и дверь.
       g.fillStyle(0x1e2226, 1);
       g.fillRect(building.x + 12, building.y + building.h - 62, building.w - 24, 46);
       g.fillStyle(0xc9b27a, 0.9);
       g.fillRect(building.x + 10, building.y - 14, building.w - 20, 12);
       litLayer.fillStyle(0xfff0c0, 0.5);
       litLayer.fillRect(building.x + 12, building.y + building.h - 62, building.w - 24, 46);
-      // Дверь
       g.fillStyle(0x2f2a24, 1);
       g.fillRect(building.x + building.w / 2 - 16, building.y + building.h - 44, 32, 44);
     }
@@ -204,7 +197,7 @@ export class DistrictBuilder {
       label.setDepth(building.y + building.h + 1);
     }
 
-    // Коллизия: фасад + крыша, чтобы игрок не заходил на здание сверху.
+    // Коллизия: фасад плюс крыша, чтобы игрок не заходил на здание сверху.
     const body = scene.add.rectangle(
       building.x + building.w / 2,
       building.y - building.height + (building.h + building.height) / 2,
@@ -234,7 +227,7 @@ export class DistrictBuilder {
         g.fillEllipse(x, y + 2, size * 1.3, size * 0.5);
         g.fillStyle(0x4a3a2c, 1);
         g.fillRect(x - 5, y - 34, 10, 34);
-        g.fillStyle(0x2f4a2f, 1);
+        g.fillStyle(prop.tint ?? 0x2f4a2f, 1);
         g.fillCircle(x, y - 52, size);
         g.fillStyle(0x3b5c39, 1);
         g.fillCircle(x - size * 0.35, y - 58, size * 0.75);
@@ -246,7 +239,7 @@ export class DistrictBuilder {
       case 'bush':
         g.fillStyle(0x000000, 0.22);
         g.fillEllipse(x, y + 2, 34, 12);
-        g.fillStyle(0x35502f, 1);
+        g.fillStyle(prop.tint ?? 0x35502f, 1);
         g.fillCircle(x - 8, y - 10, 12);
         g.fillCircle(x + 8, y - 12, 13);
         g.fillCircle(x, y - 16, 11);
@@ -321,7 +314,7 @@ export class DistrictBuilder {
       }
       case 'car': {
         const colors = [0x8c3a3a, 0x2f4a6d, 0x6d6a5f, 0x3a6d4f, 0x7a7a80];
-        const color = colors[(prop.variant ?? 0) % colors.length]!;
+        const color = prop.tint ?? colors[(prop.variant ?? 0) % colors.length]!;
         g.fillStyle(0x000000, 0.3);
         g.fillEllipse(x, y + 3, 76, 22);
         g.fillStyle(color, 1);
@@ -436,8 +429,6 @@ export class DistrictBuilder {
       default:
         break;
     }
-
-    if (prop.tint !== undefined) g.setTint?.(prop.tint);
 
     if (prop.collide && collision) {
       const body = scene.add.rectangle(x, y + collision.offsetY, collision.w, collision.h);
