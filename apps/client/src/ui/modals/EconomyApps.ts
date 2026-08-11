@@ -10,7 +10,10 @@ import type { GameContext } from '../../game/state/GameContext.js';
 type Rerender = () => void;
 
 const button = (label: string, handler: () => void, variant = ''): HTMLButtonElement => {
-  const node = el('button', { class: variant ? `btn btn--small btn--${variant}` : 'btn btn--small', text: label });
+  const node = el('button', {
+    class: variant ? 'btn btn--small btn--' + variant : 'btn btn--small',
+    text: label
+  });
   onTap(node, handler);
   return node;
 };
@@ -23,7 +26,10 @@ export function bankScreen(ctx: GameContext, rerender: Rerender): HTMLElement {
 
   if (!p.data.bankUnlocked) {
     host.append(
-      el('div', { class: 'modal__text', text: 'Счёта пока нет. С ним наличные перестанут пропадать при неприятностях.' }),
+      el('div', {
+        class: 'modal__text',
+        text: 'Счёта пока нет. С ним наличные перестанут пропадать при неприятностях.'
+      }),
       el('div', { class: 'kv' }, [
         el('span', { text: 'Открытие счёта' }),
         el('span', { text: formatMoney(GameConfig.economy.bankUnlockFee) })
@@ -31,23 +37,30 @@ export function bankScreen(ctx: GameContext, rerender: Rerender): HTMLElement {
       el('div', { class: 'kv' }, [
         el('span', { text: 'Требуется уровень' }),
         el('span', { text: String(GameConfig.economy.bankUnlockLevel) })
+      ]),
+      el('div', { style: 'margin-top:14px' }, [
+        button('ОТКРЫТЬ СЧЁТ', () => {
+          const result = ctx.economy.openBank();
+          if (!result.ok) ctx.ui.toast(result.reason ?? 'Отказ', 'bad');
+          else ctx.ui.toast('Счёт открыт', 'good');
+          rerender();
+        }, 'primary')
       ])
     );
-    const open = button('ОТКРЫТЬ СЧЁТ', () => {
-      const result = ctx.economy.openBank();
-      if (!result.ok) ctx.ui.toast(result.reason ?? 'Отказ', 'bad');
-      else ctx.ui.toast('Счёт открыт', 'good');
-      rerender();
-    }, 'primary');
-    host.append(el('div', { style: 'margin-top:14px' }, [open]));
     return host;
   }
 
   const amount = el('input', { type: 'number', value: '100', min: '10' });
 
   host.append(
-    el('div', { class: 'kv' }, [el('span', { text: 'Наличные' }), el('span', { class: 'accent', text: formatMoney(p.cash) })]),
-    el('div', { class: 'kv' }, [el('span', { text: 'На счету' }), el('span', { class: 'good', text: formatMoney(p.bank) })]),
+    el('div', { class: 'kv' }, [
+      el('span', { text: 'Наличные' }),
+      el('span', { class: 'accent', text: formatMoney(p.cash) })
+    ]),
+    el('div', { class: 'kv' }, [
+      el('span', { text: 'На счету' }),
+      el('span', { class: 'good', text: formatMoney(p.bank) })
+    ]),
     el('div', { class: 'field', style: 'margin-top:14px' }, [el('label', { text: 'Сумма' }), amount]),
     el('div', { class: 'row__side' }, [
       button('ПОЛОЖИТЬ', () => {
@@ -59,7 +72,11 @@ export function bankScreen(ctx: GameContext, rerender: Rerender): HTMLElement {
         rerender();
       })
     ]),
-    el('div', { class: 'row__desc', style: 'margin-top:12px', text: 'Деньги на счету не теряются, если ты потеряешь сознание на улице.' })
+    el('div', {
+      class: 'row__desc',
+      style: 'margin-top:12px',
+      text: 'Деньги на счету не теряются, если ты потеряешь сознание на улице.'
+    })
   );
   return host;
 }
@@ -81,34 +98,51 @@ export function housingScreen(ctx: GameContext, rerender: Rerender): HTMLElement
     host.append(
       el('div', { class: 'kv' }, [
         el('span', { text: 'Склад' }),
-        el('span', { text: formatWeight(ctx.housing.storedWeight) + ' / ' + formatWeight(ctx.housing.storageCapacity) })
+        el('span', {
+          text: formatWeight(ctx.housing.storedWeight) + ' / ' + formatWeight(ctx.housing.storageCapacity)
+        })
       ]),
       el('div', { class: 'kv' }, [
         el('span', { text: 'Аренда оплачена до' }),
-        el('span', { text: current.rentPerDay > 0 ? 'дня ' + ctx.player.data.housing.paidUntilDay : 'в собственности' })
+        el('span', {
+          text: current.rentPerDay > 0 ? 'дня ' + ctx.player.data.housing.paidUntilDay : 'в собственности'
+        })
+      ]),
+      el('div', { class: 'row', style: 'margin-top:12px' }, [
+        el('div', { class: 'row__main' }, [
+          el('div', { class: 'row__title', text: 'Отдых дома' }),
+          el('div', { class: 'row__desc', text: 'Своя крыша — лучший сон в игре' })
+        ]),
+        el('div', { class: 'row__side' }, [
+          button('Спать до утра', () => {
+            ctx.sleep.sleep(ctx.housing.sleepQuality, ctx.sleep.hoursUntilMorning());
+            rerender();
+          }, 'primary')
+        ])
       ])
     );
 
     const upgrades = el('div', { class: 'list', style: 'margin-top:12px' });
     for (const upgrade of HOUSING_UPGRADES) {
       const owned = ctx.player.data.housing.upgrades.includes(upgrade.id);
-      const row = el('div', { class: owned ? 'row row--locked' : 'row' }, [
-        el('div', { class: 'row__main' }, [
-          el('div', { class: 'row__title', text: upgrade.name }),
-          el('div', { class: 'row__desc', text: upgrade.description })
-        ]),
-        el('div', { class: 'row__side' }, [
-          owned
-            ? el('span', { class: 'tag', text: 'стоит' })
-            : button(formatMoney(upgrade.price), () => {
-                const result = ctx.housing.buyUpgrade(upgrade.id);
-                if (!result.ok) ctx.ui.toast(result.reason ?? 'Нет', 'bad');
-                else ctx.ui.toast(upgrade.name + ' установлено', 'good');
-                rerender();
-              }, 'primary')
+      upgrades.append(
+        el('div', { class: owned ? 'row row--locked' : 'row' }, [
+          el('div', { class: 'row__main' }, [
+            el('div', { class: 'row__title', text: upgrade.name }),
+            el('div', { class: 'row__desc', text: upgrade.description })
+          ]),
+          el('div', { class: 'row__side' }, [
+            owned
+              ? el('span', { class: 'tag', text: 'стоит' })
+              : button(formatMoney(upgrade.price), () => {
+                  const result = ctx.housing.buyUpgrade(upgrade.id);
+                  if (!result.ok) ctx.ui.toast(result.reason ?? 'Нет', 'bad');
+                  else ctx.ui.toast(upgrade.name + ' установлено', 'good');
+                  rerender();
+                }, 'primary')
+          ])
         ])
-      ]);
-      upgrades.append(row);
+      );
     }
     host.append(el('div', { class: 'phone__title', text: 'Обустройство' }), upgrades);
   }
@@ -181,7 +215,7 @@ export function businessScreen(ctx: GameContext, rerender: Rerender): HTMLElemen
       const type = BUSINESS_TYPES[business.typeId];
       if (!type) continue;
 
-      const actions = el('div', { class: 'row__side' }, [
+      const actions = el('div', { class: 'row__side' }, ([
         button('Товар +20', () => {
           const result = ctx.business.restock(business.id, 20);
           if (!result.ok) ctx.ui.toast(result.reason ?? 'Нет', 'bad');
@@ -210,7 +244,7 @@ export function businessScreen(ctx: GameContext, rerender: Rerender): HTMLElemen
               rerender();
             })
           : null
-      ].filter(Boolean) as HTMLElement[]);
+      ].filter(Boolean) as HTMLElement[]));
 
       list.append(
         el('div', { class: 'row' }, [
@@ -270,7 +304,10 @@ export function casinoScreen(ctx: GameContext, rerender: Rerender): HTMLElement 
   const casino = new CasinoSystem(ctx);
   const host = el('div');
   const bet = el('input', { type: 'number', value: '50', min: String(GameConfig.casino.minBet) });
-  const output = el('div', { class: 'modal__text muted', text: 'Только внутриигровые деньги. Никаких реальных ставок.' });
+  const output = el('div', {
+    class: 'modal__text muted',
+    text: 'Только внутриигровые деньги. Никаких реальных ставок и вывода.'
+  });
 
   const reels = el('div', { class: 'slots' }, [
     el('div', { class: 'slot', html: UiIcons.casino ?? '' }),
@@ -288,6 +325,28 @@ export function casinoScreen(ctx: GameContext, rerender: Rerender): HTMLElement 
   };
 
   const betValue = (): number => Math.max(GameConfig.casino.minBet, Math.round(Number(bet.value) || 0));
+
+  function gameRow(name: string, description: string, handler: () => void): HTMLElement {
+    const row = el('button', { class: 'row row--clickable', style: 'text-align:left' }, [
+      el('div', { class: 'row__main' }, [
+        el('div', { class: 'row__title', text: name }),
+        el('div', { class: 'row__desc', text: description })
+      ])
+    ]);
+    onTap(row, handler);
+    return row;
+  }
+
+  function showCards(guess: 'higher' | 'lower'): void {
+    const result = casino.playCards(betValue(), guess);
+    if (!result) return;
+    output.textContent =
+      (result.win ? 'Угадал: ' : 'Не угадал: ') +
+      result.first + ' → ' + result.second +
+      (result.payout > 0 ? ' · ' + formatMoney(result.payout) : '');
+    output.className = result.win ? 'modal__text good' : 'modal__text muted';
+    rerender();
+  }
 
   const games = el('div', { class: 'list' }, [
     gameRow('Слоты', 'Три в ряд — крупный выигрыш', () => {
@@ -327,32 +386,11 @@ export function casinoScreen(ctx: GameContext, rerender: Rerender): HTMLElement 
     })
   ]);
 
-  function showCards(guess: 'higher' | 'lower'): void {
-    const result = casino.playCards(betValue(), guess);
-    if (!result) return;
-    output.textContent =
-      (result.win ? 'Угадал: ' : 'Не угадал: ') +
-      result.first +
-      ' → ' +
-      result.second +
-      (result.payout > 0 ? ' · ' + formatMoney(result.payout) : '');
-    output.className = result.win ? 'modal__text good' : 'modal__text muted';
-    rerender();
-  }
-
-  function gameRow(name: string, description: string, handler: () => void): HTMLElement {
-    const row = el('button', { class: 'row row--clickable', style: 'text-align:left' }, [
-      el('div', { class: 'row__main' }, [
-        el('div', { class: 'row__title', text: name }),
-        el('div', { class: 'row__desc', text: description })
-      ])
-    ]);
-    onTap(row, handler);
-    return row;
-  }
-
   host.append(
-    el('div', { class: 'kv' }, [el('span', { text: 'Наличные' }), el('span', { class: 'accent', text: formatMoney(ctx.player.cash) })]),
+    el('div', { class: 'kv' }, [
+      el('span', { text: 'Наличные' }),
+      el('span', { class: 'accent', text: formatMoney(ctx.player.cash) })
+    ]),
     el('div', { class: 'field' }, [el('label', { text: 'Ставка, ₽' }), bet]),
     reels,
     output,
