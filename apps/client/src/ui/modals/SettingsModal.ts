@@ -33,7 +33,13 @@ export function showSettings(parent: HTMLElement): Modal {
     return el('div', { class: 'field' }, [el('label', { text: label }), row]);
   };
 
-  const slider = <K extends keyof GameSettings>(label: string, key: K, min = 0, max = 1, step = 0.05): HTMLElement => {
+  const slider = <K extends keyof GameSettings>(
+    label: string,
+    key: K,
+    min = 0,
+    max = 1,
+    step = 0.05
+  ): HTMLElement => {
     const input = el('input', {
       type: 'range',
       min: String(min),
@@ -43,24 +49,21 @@ export function showSettings(parent: HTMLElement): Modal {
     });
     const value = el('span', { class: 'muted', text: String(Settings.value[key]) });
     input.addEventListener('input', () => {
-      const parsed = Number(input.value) as GameSettings[K];
-      Settings.set(key, parsed);
+      Settings.set(key, Number(input.value) as unknown as GameSettings[K]);
       value.textContent = input.value;
     });
-    return el('div', { class: 'field' }, [
-      el('label', {}, [el('span', { text: label }), value]),
-      input
-    ]);
+    return el('div', { class: 'field' }, [el('label', {}, [el('span', { text: label }), value]), input]);
   };
 
   const toggle = <K extends keyof GameSettings>(label: string, key: K, description?: string): HTMLElement => {
+    const isOn = (): boolean => Boolean(Settings.value[key]);
     const button = el('button', {
-      class: Settings.value[key] ? 'btn btn--small btn--primary' : 'btn btn--small',
-      text: Settings.value[key] ? 'ВКЛ' : 'ВЫКЛ'
+      class: isOn() ? 'btn btn--small btn--primary' : 'btn btn--small',
+      text: isOn() ? 'ВКЛ' : 'ВЫКЛ'
     });
     onTap(button, () => {
-      const next = !Settings.value[key] as GameSettings[K];
-      Settings.set(key, next);
+      const next = !isOn();
+      Settings.set(key, next as unknown as GameSettings[K]);
       button.textContent = next ? 'ВКЛ' : 'ВЫКЛ';
       button.className = next ? 'btn btn--small btn--primary' : 'btn btn--small';
     });
@@ -87,6 +90,7 @@ export function showSettings(parent: HTMLElement): Modal {
       { value: 30, label: '30' },
       { value: 60, label: '60' }
     ]),
+    el('div', { class: 'row__desc', text: 'Смена лимита кадров применится при следующем запуске.' }),
     section('Звук'),
     slider('Общая громкость', 'volumeMaster'),
     slider('Музыка', 'volumeMusic'),

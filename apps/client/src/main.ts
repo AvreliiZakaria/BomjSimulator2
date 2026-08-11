@@ -61,10 +61,14 @@ game.events.once(Phaser.Core.Events.READY, () => {
   const menuScene = game.scene.getScene('MainMenu');
   const gameScene = game.scene.getScene('Game');
 
-  menuScene.events.on(Phaser.Scenes.Events.CREATE, () => ui.showMenu());
-  menuScene.events.on(Phaser.Scenes.Events.SHUTDOWN, () => ui.hideMenu());
-  gameScene.events.on(Phaser.Scenes.Events.CREATE, () => ui.showHud());
-  gameScene.events.on(Phaser.Scenes.Events.SHUTDOWN, () => ui.hideHud());
+  if (menuScene) {
+    menuScene.events.on(Phaser.Scenes.Events.CREATE, () => ui.showMenu());
+    menuScene.events.on(Phaser.Scenes.Events.SHUTDOWN, () => ui.hideMenu());
+  }
+  if (gameScene) {
+    gameScene.events.on(Phaser.Scenes.Events.CREATE, () => ui.showHud());
+    gameScene.events.on(Phaser.Scenes.Events.SHUTDOWN, () => ui.hideHud());
+  }
 });
 
 function beginSession(): void {
@@ -126,7 +130,7 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pagehide', saveOnLeave);
 window.addEventListener('beforeunload', saveOnLeave);
 
-// Подсказка про совсем узкие окна.
+// Подсказка для совсем узких окон.
 const rotateHint = document.getElementById('rotate-hint');
 const checkViewport = (): void => {
   if (!rotateHint) return;
@@ -138,4 +142,4 @@ window.addEventListener('resize', checkViewport);
 window.addEventListener('orientationchange', checkViewport);
 checkViewport();
 
-console.info(`${GameConfig.title} ${GameConfig.version} — ${GameConfig.slogan}`);
+console.info(GameConfig.title + ' ' + GameConfig.version + ' — ' + GameConfig.slogan);

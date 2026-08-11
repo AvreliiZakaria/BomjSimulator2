@@ -10,7 +10,7 @@ export interface DialogueChoice {
   effects?: GameEffect;
   /** Следующий узел или null — закрыть диалог. */
   next?: string | null;
-  /** Открыть магазин/работу/сон прямо из диалога. */
+  /** Открыть магазин/работу прямо из диалога. */
   openShop?: string;
   openJobs?: boolean;
 }
@@ -20,7 +20,10 @@ export interface DialogueNode {
   /** Реплика NPC. Держим коротко: никаких стен текста. */
   text: string;
   conditions?: GameCondition;
+  /** Срабатывает при показе узла. */
   onEnter?: GameEffect;
+  /** Синоним onEnter для удобства описания данных. */
+  effects?: GameEffect;
   choices: DialogueChoice[];
 }
 
