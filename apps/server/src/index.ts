@@ -19,7 +19,6 @@ const PORT = Number(process.env.PORT ?? 8787);
 initDb();
 
 function send(res: ServerResponse, status: number, body: unknown): void {
-  const payload = JSON.stringify(body);
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': '*',
@@ -27,7 +26,7 @@ function send(res: ServerResponse, status: number, body: unknown): void {
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     'Cache-Control': 'no-store'
   });
-  res.end(payload);
+  res.end(JSON.stringify(body));
 }
 
 async function readJson<T>(req: IncomingMessage): Promise<T | null> {
@@ -61,7 +60,7 @@ function auth(playerId: unknown, token: unknown): PlayerRecord | null {
 function buildLeaderboard(category: LeaderboardCategory, playerId?: string): LeaderboardResponse {
   const state = db();
   const rows = Object.values(state.players)
-    .filter((p) => (p.scores?.[category] ?? 0) > 0)
+    .filter((player) => (player.scores?.[category] ?? 0) > 0)
     .sort((a, b) => (b.scores[category] ?? 0) - (a.scores[category] ?? 0));
 
   const toEntry = (record: PlayerRecord, index: number): LeaderboardEntry => ({
@@ -78,7 +77,7 @@ function buildLeaderboard(category: LeaderboardCategory, playerId?: string): Lea
   let distanceToNext: number | undefined;
 
   if (playerId) {
-    const index = rows.findIndex((p) => p.playerId === playerId);
+    const index = rows.findIndex((player) => player.playerId === playerId);
     if (index >= 0) {
       self = toEntry(rows[index]!, index);
       const above = rows[index - 1];
@@ -111,6 +110,7 @@ const server = createServer(async (req, res) => {
     const state = db();
     const nickname = sanitizeNickname(body.nickname);
     const existing = body.playerId ? state.players[body.playerId] : undefined;
+
     if (existing) {
       existing.nickname = nickname;
       existing.updatedAt = Date.now();
@@ -123,6 +123,7 @@ const server = createServer(async (req, res) => {
       });
       return;
     }
+
     const record: PlayerRecord = {
       playerId: body.playerId && /^[a-zA-Z0-9-]{6,64}$/.test(body.playerId) ? body.playerId : randomUUID(),
       nickname,
@@ -146,12 +147,12 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === ApiRoutes.profile && req.method === 'POST') {
     const body = await readJson<ProfileRequest>(req);
-    const record = body && auth(body.playerId, body.token);
-    if (!record) {
-      send(res, 401, { error: '不 авторизовано' });
+    const record = body ? auth(body.playerId, body.token) : null;
+    if (!record || !body) {
+      send(res, 401, { error: 'Не авторизовано' });
       return;
     }
-    record.nickname = sanitizeNickname(body!.nickname);
+    record.nickname = sanitizeNickname(body.nickname);
     record.updatedAt = Date.now();
     persist();
     send(res, 200, { playerId: record.playerId, nickname: record.nickname });
@@ -160,18 +161,20 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === ApiRoutes.score && req.method === 'POST') {
     const body = await readJson<ScoreSubmission>(req);
-    const record = body && auth(body.playerId, body.token);
-    if (!record) {
+    const record = body ? auth(body.playerId, body.token) : null;
+    if (!record || !body) {
       send(res, 401, { error: 'Не авторизовано' });
       return;
     }
-    const result = validateScore(body!);
+
+    // Клиентским числам не верим: проверяем их темпом игры и здравым смыслом.
+    const result = validateScore(body);
     const s = result.sanitized;
     record.suspicious = result.suspicious;
     record.lastReason = result.reason;
     record.playedMinutes = Math.max(record.playedMinutes, s.playedMinutes);
     record.updatedAt = Date.now();
-    // Рейтинг только растёт: сервер хранит лучший подтверждённый результат.
+
     record.scores.wealth = Math.max(record.scores.wealth, s.wealth);
     record.scores.reputation = Math.max(record.scores.reputation, s.reputation);
     record.scores.days = Math.max(record.scores.days, s.days);
@@ -193,8 +196,7 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === ApiRoutes.leaderboard && req.method === 'GET') {
     const raw = url.searchParams.get('category') as LeaderboardCategory | null;
-    const category: LeaderboardCategory =
-      raw && LEADERBOARD_CATEGORIES.includes(raw) ? raw : 'wealth';
+    const category: LeaderboardCategory = raw && LEADERBOARD_CATEGORIES.includes(raw) ? raw : 'wealth';
     send(res, 200, buildLeaderboard(category, url.searchParams.get('playerId') ?? undefined));
     return;
   }
