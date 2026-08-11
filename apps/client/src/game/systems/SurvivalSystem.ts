@@ -46,23 +46,23 @@ export class SurvivalSystem {
       health: 0
     };
 
-    // Одежда греет, ночь и «после трёх» — забирают.
-    delta.warmth! += p.warmthFromClothes * cfg.clothingWarmthPerHour * hours;
-    if (night) delta.warmth! += cfg.nightWarmthPerHour * hours;
-    if (snapshot.isLateNight) delta.sanity! += cfg.lateNightSanityPerHour * hours;
-    if (this.ctx.isIndoors) delta.warmth! += 4 * hours;
+    // Одежда греет, ночь и «после трёх» забирают тепло и рассудок.
+    delta.warmth = (delta.warmth ?? 0) + p.warmthFromClothes * cfg.clothingWarmthPerHour * hours;
+    if (night) delta.warmth = (delta.warmth ?? 0) + cfg.nightWarmthPerHour * hours;
+    if (snapshot.isLateNight) delta.sanity = (delta.sanity ?? 0) + cfg.lateNightSanityPerHour * hours;
+    if (this.ctx.isIndoors) delta.warmth = (delta.warmth ?? 0) + 4 * hours;
 
     // Критические состояния.
-    if (p.stat('hunger') <= 0) delta.health! += cfg.starvingHealthPerHour * hours;
+    if (p.stat('hunger') <= 0) delta.health = (delta.health ?? 0) + cfg.starvingHealthPerHour * hours;
     if (p.stat('warmth') <= 0) {
-      delta.health! += cfg.freezingHealthPerHour * hours;
+      delta.health = (delta.health ?? 0) + cfg.freezingHealthPerHour * hours;
       if (chance(0.15 * hours)) p.addStatus('hypothermia');
     }
     if (p.stat('energy') <= 0) {
-      delta.sanity! += cfg.exhaustedSanityPerHour * hours;
+      delta.sanity = (delta.sanity ?? 0) + cfg.exhaustedSanityPerHour * hours;
       if (chance(0.2 * hours)) p.addStatus('fatigue');
     }
-    if (p.stat('hygiene') <= 15) delta.sanity! += cfg.filthySanityPerHour * hours;
+    if (p.stat('hygiene') <= 15) delta.sanity = (delta.sanity ?? 0) + cfg.filthySanityPerHour * hours;
     if (p.stat('warmth') < 25 && chance(0.08 * hours)) p.addStatus('cold');
 
     // Восстановление, когда базовые потребности закрыты.
@@ -73,15 +73,15 @@ export class SurvivalSystem {
       p.stat('energy') > req.energy &&
       !p.data.statuses.length
     ) {
-      delta.health! += cfg.regenHealthPerHour * hours;
+      delta.health = (delta.health ?? 0) + cfg.regenHealthPerHour * hours;
     }
 
     // Статусы тикают своим эффектом.
     for (const status of p.data.statuses) {
       const rates = cfg.statusRatesPerHour[status.id] as Partial<Record<SurvivalStat, number>> | undefined;
       if (!rates) continue;
-      for (const [key, value] of Object.entries(rates) as [SurvivalStat, number][]) {
-        delta[key] = (delta[key] ?? 0) + value * hours;
+      for (const entry of Object.entries(rates) as [SurvivalStat, number][]) {
+        delta[entry[0]] = (delta[entry[0]] ?? 0) + entry[1] * hours;
       }
     }
 
@@ -89,12 +89,14 @@ export class SurvivalSystem {
     p.tickStatuses(minutes);
     this.checkWarnings();
 
+    // Побочный квест «выглядеть как человек» закрывается по факту чистоты.
+    if (p.stat('hygiene') > 60) this.ctx.quests.progress('q_clean_look', 'hygiene', 1);
+
     if (p.stat('health') <= 0) this.blackout();
   }
 
   private checkWarnings(): void {
     const p = this.ctx.player;
-    const watch: SurvivalStat[] = ['hunger', 'warmth', 'health', 'energy', 'sanity'];
     const labels: Record<string, string> = {
       hunger: 'Голод сводит с ума',
       warmth: 'Ты замерзаешь',
@@ -102,6 +104,8 @@ export class SurvivalSystem {
       energy: 'Ноги не держат',
       sanity: 'Мысли путаются'
     };
+    const watch: SurvivalStat[] = ['hunger', 'warmth', 'health', 'energy', 'sanity'];
+
     for (const stat of watch) {
       const value = p.stat(stat);
       if (value <= GameConfig.survival.lowWarning && !this.warnedLow.has(stat)) {
@@ -113,7 +117,7 @@ export class SurvivalSystem {
     }
   }
 
-  /** Не «смерть», а потеря сознания: город даёт второй шанс, но забирает часть нажитого. */
+  /** Не смерть, а потеря сознания: город даёт второй шанс, но забирает часть нажитого. */
   private blackout(): void {
     const p = this.ctx.player;
     const lostCash = Math.round(p.cash * GameConfig.economy.blackoutCashLoss);
@@ -132,7 +136,9 @@ export class SurvivalSystem {
     void this.ctx.ui.message(
       'Ты отключился',
       lostCash > 0
-        ? `Очнулся в приёмном покое. Наличных стало меньше на ${lostCash} ₽, часть вещей пропала. Деньги в банке не тронули.`
+        ? 'Очнулся в приёмном покое. Наличных стало меньше на ' +
+            lostCash +
+            ' ₽, часть вещей пропала. Деньги в банке не тронули.'
         : 'Очнулся в приёмном покое. Часть вещей пропала. Терять уже почти нечего.'
     );
   }

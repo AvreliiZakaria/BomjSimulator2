@@ -11,7 +11,7 @@ export class HousingSystem {
     return getHousing(this.ctx.player.data.housing.id);
   }
 
-  /** Качество сна с учётом улучшений. */
+  /** Качество сна дома. Без жилья — земля. */
   get sleepQuality(): SleepQuality {
     return this.current?.quality ?? 'ground';
   }
@@ -38,7 +38,7 @@ export class HousingSystem {
     return { ok: true };
   }
 
-  /** Снять жильё: платим за первые 7 дней вперёд. */
+  /** Снять жильё: платим за несколько дней вперёд. */
   rent(housingId: string, days = 7): { ok: boolean; reason?: string } {
     const check = this.canTake(housingId);
     if (!check.ok) return check;
@@ -46,8 +46,8 @@ export class HousingSystem {
     if (housing.rentPerDay <= 0) return { ok: false, reason: 'Это жильё только покупается' };
 
     const total = housing.rentPerDay * days;
-    if (!this.ctx.player.spendCash(total, `rent:${housingId}`)) {
-      return { ok: false, reason: `Нужно ${total} ₽ за ${days} дней вперёд` };
+    if (!this.ctx.player.spendCash(total, 'rent:' + housingId)) {
+      return { ok: false, reason: 'Нужно ' + total + ' ₽ за ' + days + ' дней вперёд' };
     }
 
     const state = this.ctx.player.data.housing;
@@ -65,13 +65,13 @@ export class HousingSystem {
     if (!check.ok) return check;
     const housing = HOUSING[housingId]!;
     if (!housing.buyPrice) return { ok: false, reason: 'Это жильё только в аренду' };
-    if (!this.ctx.player.spendCash(housing.buyPrice, `buy:${housingId}`)) {
+    if (!this.ctx.player.spendCash(housing.buyPrice, 'buy:' + housingId)) {
       return { ok: false, reason: 'Не хватает денег' };
     }
     const state = this.ctx.player.data.housing;
     state.id = housingId;
     state.paidUntilDay = 99999;
-    this.ctx.player.setFlag(`owns:${housingId}`, 1);
+    this.ctx.player.setFlag('owns:' + housingId, 1);
     this.afterMove(housingId);
     return { ok: true };
   }
@@ -80,9 +80,11 @@ export class HousingSystem {
     const housing = HOUSING[housingId]!;
     if (housing.tier >= 4) this.ctx.player.setFlag('hasRoom', 1);
     this.ctx.player.changeReputation('city', 3);
-    this.ctx.quests.notify('interact', `housing:${housingId}`, 1);
+    // Отдельно сообщаем про факт «появилась своя крыша» — на это завязан сюжетный квест.
+    this.ctx.quests.notify('interact', '*housing', 1);
+    this.ctx.quests.notify('interact', 'housing:' + housingId, 1);
     this.ctx.achievements.check();
-    this.ctx.ui.toast(`Теперь у тебя есть: ${housing.name}`, 'good');
+    this.ctx.ui.toast('Теперь у тебя есть: ' + housing.name, 'good');
     this.ctx.save(true);
   }
 
@@ -97,7 +99,7 @@ export class HousingSystem {
     if (this.ctx.player.data.housing.upgrades.includes(upgradeId)) {
       return { ok: false, reason: 'Уже стоит' };
     }
-    if (!this.ctx.player.spendCash(upgrade.price, `upgrade:${upgradeId}`)) {
+    if (!this.ctx.player.spendCash(upgrade.price, 'upgrade:' + upgradeId)) {
       return { ok: false, reason: 'Не хватает денег' };
     }
     this.ctx.player.data.housing.upgrades.push(upgradeId);
@@ -115,7 +117,7 @@ export class HousingSystem {
 
     if (this.ctx.player.spendCash(housing.rentPerDay, 'rent')) {
       state.paidUntilDay = day;
-      this.ctx.ui.toast(`Аренда: -${housing.rentPerDay} ₽`, 'neutral');
+      this.ctx.ui.toast('Аренда: -' + housing.rentPerDay + ' ₽', 'neutral');
     } else {
       state.id = null;
       state.storage = [];
@@ -124,7 +126,6 @@ export class HousingSystem {
     }
   }
 
-  /** Положить вещь на домашний склад. */
   store(itemId: string, count = 1): boolean {
     if (!this.current) return false;
     if (!this.ctx.inventory.has(itemId, count)) return false;
